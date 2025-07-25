@@ -1,2 +1,0 @@
-# PowerShell Configuration
-![Images](images/)
