@@ -72,7 +72,7 @@ My personal PowerShell configuration — including dotfiles, modules, themes, an
 
 Here’s a preview of the PowerShell configuration in action:
 
-![PowerShell Preview](./images/poweshell.png)
+![PowerShell Preview](./images/powershell.png)
 
 ## All Available Modules / Tools
 
