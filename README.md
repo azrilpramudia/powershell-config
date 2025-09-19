@@ -84,14 +84,7 @@ These are the main modules and tools used in this configuration:
 - [z](https://github.com/agkozak/zsh-z) — Directory jumper (`Modules/z/`)  
 - [PowerShell Gallery](https://www.powershellgallery.com/) — Source for installing extra modules  
 
-*(You can expand this list with more tools/modules as you add them to the repository.)*
-
-## Contributing
-
-Contributions are welcome! You can help by:  
-- Opening issues for bugs or suggestions  
-- Submitting pull requests with improvements, modules, or themes  
-- Expanding the documentation for clarity  
+*(You can expand this list with more tools/modules as you add them to the repository.)*  
 
 ## License
 
