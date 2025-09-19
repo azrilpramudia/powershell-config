@@ -2,6 +2,12 @@
 
 My personal PowerShell configuration — including dotfiles, modules, themes, and additional setups to make the shell experience more comfortable and productive.
 
+## Screenshots
+
+Here’s a preview of the PowerShell configuration in action:
+
+![PowerShell Preview](./images/powershell.png)
+
 ## Features
 
 - Custom PowerShell profile (`Microsoft.PowerShell_profile.ps1`) for aliases, functions, and other tweaks  
