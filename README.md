@@ -2,12 +2,6 @@
 
 My personal PowerShell configuration — including dotfiles, modules, themes, and additional setups to make the shell experience more comfortable and productive.
 
-## Screenshots
-
-Here’s a preview of the PowerShell configuration in action:
-
-![PowerShell Preview](./images/powershell.png)
-
 ## Features
 
 - Custom PowerShell profile (`Microsoft.PowerShell_profile.ps1`) for aliases, functions, and other tweaks  
@@ -76,7 +70,21 @@ Here’s a preview of the PowerShell configuration in action:
 
 ## Screenshots
 
-*(Add screenshots from the `images/` folder here to showcase how the shell looks with this configuration.)*
+Here’s a preview of the PowerShell configuration in action:
+
+![PowerShell Preview](./images/poweshell.png)
+
+## All Available Modules / Tools
+
+These are the main modules and tools used in this configuration:
+
+- [Oh My Posh](https://ohmyposh.dev) — A prompt theme engine for PowerShell  
+- [PSReadLine](https://github.com/PowerShell/PSReadLine) — Command-line editing, syntax highlighting, history  
+- [posh-git](https://github.com/dahlbyk/posh-git) — Git status summary information in prompt  
+- [z](https://github.com/agkozak/zsh-z) — Directory jumper (`Modules/z/`)  
+- [PowerShell Gallery](https://www.powershellgallery.com/) — Source for installing extra modules  
+
+*(You can expand this list with more tools/modules as you add them to the repository.)*
 
 ## Contributing
 
