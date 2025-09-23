@@ -43,12 +43,7 @@ if (-not (Get-Variable apps -Scope Global -ErrorAction SilentlyContinue)) {
 function Save-AppsToProfile {
     # Bangun ulang isi $apps sebagai string berblok
     $appsBlock = @()
-    $appsBlock += '# ===== Auto-generated apps dictionary ====='
-    $appsBlock += '$global:apps = @{'
-    foreach ($k in ($apps.Keys | Sort-Object)) {
-        $appsBlock += "    `"$k`" = `"$($apps[$k])`""
-    }
-    $appsBlock += '}'
+    $appsBlock += '    $appsBlock += '}'
     $appsBlock += ''
 
     # Baca & update profile
@@ -56,10 +51,7 @@ function Save-AppsToProfile {
     $content = if (Test-Path $profilePath) { Get-Content $profilePath -Raw } else { "" }
 
     # Hapus blok lama (jika ada), lalu sisip blok baru di akhir
-    $newContent = $content -replace '(?s)# ===== Auto-generated apps dictionary =====.*?}\r?\n', ''
-    $newContent = $newContent.Trim()
-    if ($newContent.Length -gt 0) { $newContent += "`r`n" }
-    $newContent += ($appsBlock -join "`r`n")
+    $newContent = $content -replace '(?s)    $newContent += ($appsBlock -join "`r`n")
 
     $newContent | Set-Content $profilePath -Encoding UTF8
 }
@@ -176,3 +168,17 @@ function list-apps {
 Write-Output "✅ Please registered this application on PowerShell command profile:"
 $apps.Keys | Sort-Object | ForEach-Object { Write-Output "   - $_" }
 Write-Output "ℹ️  Perintah: open <name>, register-app <name> <path>, remove-app <name>, update-app <name> <path>, list-apps [filter], open --help"
+# ===== Auto-generated apps dictionary =====
+$global:apps = @{
+    "calc" = "calc"
+    "chrome" = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+    "msedge" = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+    "msexcel" = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.exe"
+    "mspoint" = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.exe"
+    "msword" = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.exe"
+    "notepad" = "notepad"
+    "pcsx2" = "C:\Users\azril\Documents\pcsx2-v2.3.88-windows-x64-Qt\pcsx2-qt.exe"
+    "spotify" = "C:\Users\Azril\AppData\Roaming\Spotify\Spotify.exe"
+    "vscode" = "C:\Users\Azril\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+}
+
