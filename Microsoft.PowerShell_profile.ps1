@@ -308,11 +308,11 @@ function list-apps {
     }
 }
 
-# -- Pesan startup --
-Write-Output "✅ Please registered this application on PowerShell command profile:"
-$apps.Keys | Sort-Object | ForEach-Object { Write-Output "   - $_" }
-Write-Output "ℹ️  Perintah utama: open <name>, register-app, update-app, remove-app, list-apps"
-Write-Output "ℹ️  Bantuan lengkap: open --help"
+# -- Startup Message --
+# Write-Output "✅ Please registered this application on PowerShell command profile:"
+# $apps.Keys | Sort-Object | ForEach-Object { Write-Output "   - $_" }
+Write-Output "ℹ️  Main Command: open <name>, register-app, update-app, remove-app, list-apps"
+Write-Output "ℹ️  Complete Help: open --help"
 
 # ================= Aliases & Autocomplete =================
 
