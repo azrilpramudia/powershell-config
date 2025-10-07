@@ -469,6 +469,129 @@ function list-apps {
     }
 }
 
+# ===================== Play Video =====================
+# Ekstensi video umum
+$global:VideoExtensions = @('.mp4','.mkv','.avi','.mov','.webm','.m4v','.wmv','.flv','.3gp','.m2ts','.mpg','.mpeg')
+
+function Test-IsVideoExtension {
+    param([string]$PathOrName)
+    $ext = [System.IO.Path]::GetExtension($PathOrName)
+    return $global:VideoExtensions -contains ($ext.ToLower())
+}
+
+function play-video {
+    <#
+    .SYNOPSIS
+      Buka video/file/URL dari PowerShell.
+
+    .EXAMPLES
+      play-video "D:\Movies\Interstellar.mkv"
+      play-video *.mp4
+      play-video "D:\Clips\*.mp4" -Recurse
+      play-video https://youtu.be/dQw4w9WgXcQ
+      play-video .\trailer.mp4 -With vlc       # player dari registry $apps
+      play-video *.mkv -With "C:\Program Files\VideoLAN\VLC\vlc.exe"
+
+    .PARAMETER Path
+      File/Pattern/URL. Bisa banyak argumen.
+
+    .PARAMETER With
+      Nama app di $apps (atau path exe) untuk memaksa player tertentu.
+
+    .PARAMETER Recurse
+      Cari video di subfolder saat pattern dipakai.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromRemainingArguments=$true, Position=0)]
+        [string[]]$Path,
+        [string]$With,
+        [switch]$Recurse
+    )
+
+    # Resolve player (optional)
+    $player = $null
+    if ($PSBoundParameters.ContainsKey('With') -and -not [string]::IsNullOrWhiteSpace($With)) {
+        $key = $With.ToLower()
+        if ($apps.ContainsKey($key)) {
+            $player = Resolve-AppPath $apps[$key]
+        } else {
+            # Kalau user kasih path langsung ke exe
+            $player = Resolve-AppPath $With
+        }
+        if (-not (Test-AppTarget $player)) {
+            Write-Warning "Player '$With' tidak ditemukan/tersedia. Pakai default app saja."
+            $player = $null
+        }
+    }
+
+    $opened = 0
+    foreach ($p in $Path) {
+        $p = [Environment]::ExpandEnvironmentVariables($p)
+
+        # URL? (http/https atau custom scheme)
+        $isUri, $scheme, $reg = Test-UriScheme $p
+        if ($isUri -or $p -match '^(http|https)://') {
+            if ($player) {
+                try { Start-Process -FilePath $player -ArgumentList @($p) ; $opened++ }
+                catch { Write-Error "Gagal membuka URL dengan player: $p" }
+            } else {
+                try { Start-Process $p ; $opened++ }
+                catch { Write-Error "Gagal membuka URL: $p" }
+            }
+            continue
+        }
+
+        # Pattern / Path
+        $items = @()
+        try {
+            # Gunakan -ErrorAction untuk pattern yang tidak match
+            $gciParams = @{
+                Path = $p
+                File = $true
+                ErrorAction = 'SilentlyContinue'
+            }
+            if ($Recurse) { $gciParams['Recurse'] = $true }
+            $items = Get-ChildItem @gciParams
+            if (-not $items -and (Test-Path -LiteralPath $p -PathType Leaf)) {
+                # literal exact file
+                $items = ,(Get-Item -LiteralPath $p)
+            }
+        } catch {}
+
+        if (-not $items) {
+            Write-Warning "Tidak ditemukan: $p"
+            continue
+        }
+
+        foreach ($it in $items) {
+            # filter hanya video (kalau bukan video tapi user ingin paksa, hapus kondisi ini)
+            if (-not (Test-IsVideoExtension $it.Name)) {
+                Write-Verbose "Skip (bukan video): $($it.FullName)"
+                continue
+            }
+
+            try {
+                if ($player) {
+                    Start-Process -FilePath $player -ArgumentList @("`"$($it.FullName)`"")
+                } else {
+                    # Default app Windows untuk ekstensi tsb
+                    Invoke-Item -LiteralPath $it.FullName
+                }
+                $opened++
+            } catch {
+                Write-Error "Gagal membuka: $($it.FullName)"
+            }
+        }
+    }
+
+    if ($opened -gt 0) {
+        Write-Host "🎬 Opened $opened item(s)." -ForegroundColor Cyan
+    } else {
+        Write-Host "⚠️  Tidak ada video yang dibuka." -ForegroundColor Yellow
+    }
+}
+
 # -- Startup Message --
 Write-Output "ℹ️  Main Command: open <name>, register-app, update-app, remove-app, list-apps"
 Write-Output "ℹ️  Complete Help: open --help"
@@ -480,6 +603,8 @@ Set-Alias updapp   update-app
 Set-Alias rmapp    remove-app
 function apps { param([string]$filter) if ($PSBoundParameters.ContainsKey('filter') -and $null -ne $filter -and $filter.Trim().Length -gt 0) { list-apps $filter } elseif ($args.Count -gt 0) { list-apps $args[0] } else { list-apps } }
 Set-Alias la apps
+Set-Alias play play-video
+
 
 # =====================================================================
 # ===== Auto-generated apps dictionary =====
