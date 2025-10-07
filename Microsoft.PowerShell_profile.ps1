@@ -138,6 +138,95 @@ function Test-AppTarget {
     }
 }
 
+# ---------------- Colored ASCII Help Screen ----------------
+function Show-LauncherHelp {
+    # Detect ANSI support (PowerShell 7+)
+    $hasAnsi = $PSStyle -ne $null
+
+  $banner = @'
+  _    _ ______ _      _____  
+ | |  | |  ____| |    |  __ \ 
+ | |__| | |__  | |    | |__) |
+ |  __  |  __| | |    |  _  / 
+ | |  | | |____| |____| |  
+ |_|  |_|______|______|_|  
+                              
+'@
+
+
+    $lines = @(
+        @{ text = "PowerShell App Launcher – Command Summary"; style = "title" }
+        @{ text = "-------------------------------------------"; style = "dim"   }
+        @{ text = "open <name>                  → Launch an app"; style = "cmd"   }
+        @{ text = "register-app <n> <p>         → Register a new app"; style = "cmd" }
+        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
+        @{ text = "update-app <n> <p>           → Update an app path/command"; style = "cmd" }
+        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
+        @{ text = "remove-app <name>            → Remove app from registry"; style = "cmd" }
+        @{ text = "list-apps [filter]           → Show registered apps"; style = "cmd" }
+        @{ text = "";                              style = "" }
+        @{ text = "Quick aliases:";                style = "title2" }
+        @{ text = "  o, regapp, updapp, rmapp, apps / la"; style = "cmd" }
+        @{ text = "";                              style = "" }
+        @{ text = "Examples:";                     style = "title2" }
+        @{ text = "  open vscode";                 style = "ex" }
+        @{ text = "  regapp store ms-windows-store:"; style = "ex" }
+        @{ text = "  updapp vscode 'C:\New\Path\Code.exe'"; style = "ex" }
+        @{ text = "  rmapp store";                 style = "ex" }
+        @{ text = "  apps ms";                     style = "ex" }
+    )
+
+    if ($hasAnsi) {
+        # ANSI styles (PowerShell 7+)
+        $c = [pscustomobject]@{
+            accent  = $PSStyle.Foreground.Cyan + $PSStyle.Bold
+            title   = $PSStyle.Foreground.BrightYellow + $PSStyle.Bold
+            title2  = $PSStyle.Foreground.BrightYellow
+            cmd     = $PSStyle.Foreground.BrightGreen
+            ex      = $PSStyle.Foreground.BrightBlue
+            dim     = $PSStyle.Foreground.BrightBlack
+            reset   = $PSStyle.Reset
+        }
+
+        # Banner
+        Write-Host ($c.accent + $banner + $c.reset)
+
+        foreach ($ln in $lines) {
+            $style =
+                if ($ln.style -eq "title")  { $c.title }
+                elseif ($ln.style -eq "title2") { $c.title2 }
+                elseif ($ln.style -eq "cmd") { $c.cmd }
+                elseif ($ln.style -eq "ex")  { $c.ex }
+                elseif ($ln.style -eq "dim") { $c.dim }
+                else { "" }
+            Write-Host ($style + $ln.text + $c.reset)
+        }
+    }
+    else {
+        # Fallback for Windows PowerShell 5.1 (no $PSStyle)
+        Write-Host $banner -ForegroundColor Cyan
+        Write-Host "PowerShell App Launcher – Command Summary" -ForegroundColor Yellow
+        Write-Host "-------------------------------------------" -ForegroundColor DarkGray
+        Write-Host "open <name>                  → Launch an app" -ForegroundColor Green
+        Write-Host "register-app <n> <p>         → Register a new app" -ForegroundColor Green
+        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
+        Write-Host "update-app <n> <p>           → Update an app path/command" -ForegroundColor Green
+        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
+        Write-Host "remove-app <name>            → Remove app from registry" -ForegroundColor Green
+        Write-Host "list-apps [filter]           → Show registered apps" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Quick aliases:" -ForegroundColor Yellow
+        Write-Host "  o, regapp, updapp, rmapp, apps / la" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Examples:" -ForegroundColor Yellow
+        Write-Host "  open vscode" -ForegroundColor Blue
+        Write-Host "  regapp store ms-windows-store:" -ForegroundColor Blue
+        Write-Host "  updapp vscode 'C:\New\Path\Code.exe'" -ForegroundColor Blue
+        Write-Host "  rmapp store" -ForegroundColor Blue
+        Write-Host "  apps ms" -ForegroundColor Blue
+    }
+}
+
 # -- Launcher: open (with integrated help) --
 function open {
     param(
@@ -149,27 +238,7 @@ function open {
 
     # ===== HELP MODE =====
     if ($key -in @('--help','-h','/h','help','/?')) {
-        Write-Output ""
-        Write-Output "📘 PowerShell App Launcher – Command Summary"
-        Write-Output "-------------------------------------------"
-        Write-Output "open <name>                  → Launch an app"
-        Write-Output "register-app <n> <p>         → Register a new app"
-        Write-Output "   -Force, -DryRun           → Optional validation flags"
-        Write-Output "update-app <n> <p>           → Update an app path/command"
-        Write-Output "   -Force, -DryRun           → Optional validation flags"
-        Write-Output "remove-app <name>            → Remove app from registry"
-        Write-Output "list-apps [filter]           → Show registered apps"
-        Write-Output ""
-        Write-Output "Quick aliases:"
-        Write-Output "  o, regapp, updapp, rmapp, apps / la"
-        Write-Output ""
-        Write-Output "Examples:"
-        Write-Output "  open vscode"
-        Write-Output "  regapp store ms-windows-store:"
-        Write-Output "  updapp vscode 'C:\New\Path\Code.exe'"
-        Write-Output "  rmapp store"
-        Write-Output "  apps ms"
-        Write-Output ""
+        Show-LauncherHelp
         return
     }
 
@@ -352,15 +421,13 @@ function list-apps {
 Write-Output "ℹ️  Main Command: open <name>, register-app, update-app, remove-app, list-apps"
 Write-Output "ℹ️  Complete Help: open --help"
 
-# ================= Aliases & Autocomplete =================
+# ================= Aliases =================
 
 # Short aliases
 Set-Alias o        open
 Set-Alias regapp   register-app
 Set-Alias updapp   update-app
 Set-Alias rmapp    remove-app
-# keep 'la' for list-apps
-Set-Alias la       list-apps
 
 # 'apps' wrapper that forwards filter automatically
 function apps {
@@ -374,98 +441,6 @@ function apps {
     }
 }
 Set-Alias la apps
-
-# ---------- Fuzzy Autocomplete Helpers ----------
-# Subsequence tester (for fuzzy)
-if (-not (Get-Command Test-Subsequence -ErrorAction SilentlyContinue)) {
-    function Test-Subsequence {
-        param([string]$Text, [string]$Pattern)
-        if ([string]::IsNullOrWhiteSpace($Pattern)) { return $true, 0 }
-        $i = 0; $j = 0; $gaps = 0
-        $t = $Text.ToLower(); $p = $Pattern.ToLower()
-        while ($i -lt $t.Length -and $j -lt $p.Length) {
-            if ($t[$i] -eq $p[$j]) { $j++ } else { $gaps++ }
-            $i++
-        }
-        return ($j -eq $p.Length), $gaps
-    }
-}
-
-function Complete-AppNameFuzzy {
-    param([string]$wordToComplete)
-
-    $term = "$wordToComplete"
-    $keys = $apps.Keys
-
-    $scored = foreach ($k in $keys) {
-        $kl = $k.ToLower()
-        $score = $null
-        if ($term.Length -eq 0) {
-            $score = 0
-        }
-        elseif ($kl.StartsWith($term.ToLower())) {
-            $score = 0 + ($kl.Length - $term.Length)         # best: prefix
-        }
-        elseif ($kl -like "*$term*") {
-            $idx = $kl.IndexOf($term.ToLower())
-            $score = 100 + $idx + ($kl.Length - $term.Length) # middle: contains
-        }
-        else {
-            $ok,$gaps = Test-Subsequence -Text $kl -Pattern $term.ToLower()
-            if ($ok) { $score = 200 + $gaps + [math]::Abs($kl.Length - $term.Length) } # fallback: subsequence
-        }
-        if ($null -ne $score) { [pscustomobject]@{ Key=$k; Score=$score } }
-    }
-
-    foreach ($c in ($scored | Sort-Object Score, { $_.Key.Length }, Key | Select-Object -First 30)) {
-        [System.Management.Automation.CompletionResult]::new($c.Key, $c.Key, 'ParameterValue', $c.Key)
-    }
-}
-
-# ---- Autocomplete for 'apps' (filter parameter) - fuzzy ----
-Register-ArgumentCompleter -CommandName apps -ParameterName filter -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-
-# ---- Autocomplete app names for 'open' (fuzzy) ----
-Register-ArgumentCompleter -CommandName open -ParameterName app -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-
-# ---- Autocomplete for 'update-app' & 'remove-app' (fuzzy) ----
-Register-ArgumentCompleter -CommandName update-app -ParameterName name -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-Register-ArgumentCompleter -CommandName remove-app -ParameterName name -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-# support aliases
-Register-ArgumentCompleter -CommandName updapp -ParameterName name -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-Register-ArgumentCompleter -CommandName rmapp -ParameterName name -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete)
-    Complete-AppNameFuzzy -wordToComplete $wordToComplete
-}
-
-# ---- Autocomplete for Force/DryRun flags ----
-Register-ArgumentCompleter -CommandName register-app -ParameterName Force -ScriptBlock {
-    [System.Management.Automation.CompletionResult]::new('-Force','-Force','ParameterName','Force register even if path not found')
-}
-Register-ArgumentCompleter -CommandName update-app -ParameterName Force -ScriptBlock {
-    [System.Management.Automation.CompletionResult]::new('-Force','-Force','ParameterName','Force update even if path not found')
-}
-Register-ArgumentCompleter -CommandName register-app -ParameterName DryRun -ScriptBlock {
-    [System.Management.Automation.CompletionResult]::new('-DryRun','-DryRun','ParameterName','Preview without writing profile')
-}
-Register-ArgumentCompleter -CommandName update-app -ParameterName DryRun -ScriptBlock {
-    [System.Management.Automation.CompletionResult]::new('-DryRun','-DryRun','ParameterName','Preview without writing profile')
-}
 
 # =====================================================================
 # ===== Auto-generated apps dictionary =====
@@ -493,3 +468,186 @@ $global:apps = @{
     "vscode"    = "C:\Users\Azril\AppData\Local\Programs\Microsoft VS Code\Code.exe"
 }
 # =====================================================================
+
+
+# =============================== ADD-ON OVERRIDES ===============================
+# 1) Override HELP banner to short "HELP" ASCII (colors & texts below remain unchanged)
+function Show-LauncherHelp {
+    $hasAnsi = $PSStyle -ne $null
+    $banner = @'
+  _    _ ______ _      _____  
+ | |  | |  ____| |    |  __ \ 
+ | |__| | |__  | |    | |__) |
+ |  __  |  __| | |    |  _  / 
+ | |  | | |____| |____| |  
+ |_|  |_|______|______|_| 
+                              
+'@
+    $lines = @(
+        @{ text = "PowerShell App Launcher – Command Summary"; style = "title" }
+        @{ text = "-------------------------------------------"; style = "dim"   }
+        @{ text = "open <name>                  → Launch an app"; style = "cmd"   }
+        @{ text = "register-app <n> <p>         → Register a new app"; style = "cmd" }
+        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
+        @{ text = "update-app <n> <p>           → Update an app path/command"; style = "cmd" }
+        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
+        @{ text = "remove-app <name>            → Remove app from registry"; style = "cmd" }
+        @{ text = "list-apps [filter]           → Show registered apps"; style = "cmd" }
+        @{ text = "";                              style = "" }
+        @{ text = "Quick aliases:";                style = "title2" }
+        @{ text = "  o, regapp, updapp, rmapp, apps / la"; style = "cmd" }
+        @{ text = "";                              style = "" }
+        @{ text = "Examples:";                     style = "title2" }
+        @{ text = "  open vscode";                 style = "ex" }
+        @{ text = "  regapp store ms-windows-store:"; style = "ex" }
+        @{ text = "  updapp vscode 'C:\New\Path\Code.exe'"; style = "ex" }
+        @{ text = "  rmapp store";                 style = "ex" }
+        @{ text = "  apps ms";                     style = "ex" }
+    )
+
+    if ($hasAnsi) {
+        $c = [pscustomobject]@{
+            accent  = $PSStyle.Foreground.Cyan + $PSStyle.Bold
+            title   = $PSStyle.Foreground.BrightYellow + $PSStyle.Bold
+            title2  = $PSStyle.Foreground.BrightYellow
+            cmd     = $PSStyle.Foreground.BrightGreen
+            ex      = $PSStyle.Foreground.BrightBlue
+            dim     = $PSStyle.Foreground.BrightBlack
+            reset   = $PSStyle.Reset
+        }
+        Write-Host ($c.accent + $banner + $c.reset)
+        foreach ($ln in $lines) {
+            $style =
+                if ($ln.style -eq "title")      { $c.title }
+                elseif ($ln.style -eq "title2") { $c.title2 }
+                elseif ($ln.style -eq "cmd")    { $c.cmd }
+                elseif ($ln.style -eq "ex")     { $c.ex }
+                elseif ($ln.style -eq "dim")    { $c.dim }
+                else { "" }
+            Write-Host ($style + $ln.text + $c.reset)
+        }
+    } else {
+        Write-Host $banner -ForegroundColor Cyan
+        Write-Host "PowerShell App Launcher – Command Summary" -ForegroundColor Yellow
+        Write-Host "-------------------------------------------" -ForegroundColor DarkGray
+        Write-Host "open <name>                  → Launch an app" -ForegroundColor Green
+        Write-Host "register-app <n> <p>         → Register a new app" -ForegroundColor Green
+        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
+        Write-Host "update-app <n> <p>           → Update an app path/command" -ForegroundColor Green
+        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
+        Write-Host "remove-app <name>            → Remove app from registry" -ForegroundColor Green
+        Write-Host "list-apps [filter]           → Show registered apps" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Quick aliases:" -ForegroundColor Yellow
+        Write-Host "  o, regapp, updapp, rmapp, apps / la" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Examples:" -ForegroundColor Yellow
+        Write-Host "  open vscode" -ForegroundColor Blue
+        Write-Host "  regapp store ms-windows-store:" -ForegroundColor Blue
+        Write-Host "  updapp vscode 'C:\New\Path\Code.exe'" -ForegroundColor Blue
+        Write-Host "  rmapp store" -ForegroundColor Blue
+        Write-Host "  apps ms" -ForegroundColor Blue
+    }
+}
+
+# 2) Add banner + color table for list-apps
+function Show-AppsBanner {
+    $hasAnsi = $PSStyle -ne $null
+    $banner = @'
+    _    ____  ____  _____ 
+   / \  |  _ \|  _ \| ____|
+  / _ \ | |_) | |_) |  _|  
+ / ___ \|  __/|  __/| |___ 
+/_/   \_\_|   |_|   |_____|
+'@
+    if ($hasAnsi) {
+        $c = [pscustomobject]@{
+            accent = $PSStyle.Foreground.Cyan + $PSStyle.Bold
+            reset  = $PSStyle.Reset
+        }
+        Write-Host ($c.accent + $banner + $c.reset)
+    } else {
+        Write-Host $banner -ForegroundColor Cyan
+    }
+}
+
+function list-apps {
+    param([string]$filter)
+
+    $pairs = if ([string]::IsNullOrWhiteSpace($filter)) {
+        $apps.GetEnumerator() | Sort-Object Key
+    } else {
+        $apps.GetEnumerator() | Where-Object { $_.Key -like "*$filter*" } | Sort-Object Key
+    }
+
+    Show-AppsBanner
+
+    if (-not $pairs) {
+        if ($filter) {
+            Write-Host "No apps match filter: '$filter'." -ForegroundColor Yellow
+        } else {
+            Write-Host "No apps registered yet." -ForegroundColor Yellow
+        }
+        return
+    }
+
+    $nameWidth = [Math]::Max(4, ($pairs | ForEach-Object { $_.Key.Length } | Measure-Object -Maximum).Maximum)
+    $pathWidth = [Math]::Max(4, ($pairs | ForEach-Object { $_.Value.Length } | Measure-Object -Maximum).Maximum)
+    $totalWidth = $nameWidth + $pathWidth + 5   # borders + separator
+
+    $hasAnsi = $PSStyle -ne $null
+    if ($hasAnsi) {
+        $c = [pscustomobject]@{
+            box    = $PSStyle.Foreground.BrightBlack
+            title  = $PSStyle.Foreground.BrightYellow + $PSStyle.Bold
+            name   = $PSStyle.Foreground.BrightGreen
+            path   = $PSStyle.Foreground.BrightBlue
+            dim    = $PSStyle.Foreground.BrightBlack
+            cnt    = $PSStyle.Foreground.Cyan
+            reset  = $PSStyle.Reset
+        }
+
+        $top    = $c.box + "+" + ("-" * ($totalWidth-2)) + "+" + $c.reset
+        $hdrTxt = (" Name".PadRight($nameWidth) + " | " + "Path".PadRight($pathWidth))
+        $hdr    = $c.box + "|" + $c.title + $hdrTxt + $c.reset + $c.box + "|" + $c.reset
+        $sep    = $c.box + "+" + ("=" * ($totalWidth-2)) + "+" + $c.reset
+
+        Write-Host $top
+        Write-Host $hdr
+        Write-Host $sep
+
+        foreach ($p in $pairs) {
+            $name = ($p.Key).PadRight($nameWidth)
+            $path = ($p.Value).PadRight($pathWidth)
+            $line = $c.box + "|" + $c.name + $name + $c.reset + $c.box + " | " + $c.reset + $c.path + $path + $c.reset + $c.box + "|" + $c.reset
+            Write-Host $line
+        }
+
+        $bottom = $c.box + "+" + ("-" * ($totalWidth-2)) + "+" + $c.reset
+        Write-Host $bottom
+        Write-Host ($c.cnt + ("Total apps: {0}" -f ($pairs.Count)) + $c.reset)
+
+        if ($filter) {
+            Write-Host ($c.dim + ("Filter: '{0}'" -f $filter) + $c.reset)
+        }
+    } else {
+        $top    = "+" + ("-" * ($totalWidth-2)) + "+"
+        $hdrTxt = (" Name".PadRight($nameWidth) + " | " + "Path".PadRight($pathWidth))
+        $sep    = "+" + ("=" * ($totalWidth-2)) + "+"
+
+        Write-Host $top -ForegroundColor DarkGray
+        Write-Host ("|" + $hdrTxt + "|") -ForegroundColor Yellow
+        Write-Host $sep -ForegroundColor DarkGray
+
+        foreach ($p in $pairs) {
+            $name = ($p.Key).PadRight($nameWidth)
+            $path = ($p.Value).PadRight($pathWidth)
+            Write-Host ("|" + $name + " | " + $path + "|")
+        }
+
+        Write-Host ("+" + ("-" * ($totalWidth-2)) + "+") -ForegroundColor DarkGray
+        Write-Host ("Total apps: {0}" -f ($pairs.Count)) -ForegroundColor Cyan
+        if ($filter) { Write-Host ("Filter: '{0}'" -f $filter) -ForegroundColor DarkGray }
+    }
+}
+# ============================= END ADD-ON OVERRIDES =============================
