@@ -1,4 +1,4 @@
-# ============= Prompt, modul, dan preferensi =============
+# ============= Prompt, modules, and preferences =============
 oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH\kushal.omp.json" | Invoke-Expression
 Import-Module Terminal-Icons
 
@@ -13,7 +13,7 @@ Set-PSReadLineOption -PredictionViewStyle ListView
 Import-Module PSFzf
 Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+f' -PSReadlineChordReverseHistory 'Ctrl+r'
 
-# Alias umum
+# Common alias
 Set-Alias -Name vim -Value nvim
 
 # Chocolatey tab-completion
@@ -27,7 +27,7 @@ if (Test-Path($ChocolateyProfile)) {
 # Features: open, register-app, remove-app, update-app, list-apps
 # =====================================================================
 
-# -- Seed dictionary global (akan ditimpa blok auto-generated di bawah) --
+# -- Global seed dictionary (will be overwritten by the auto-generated block below) --
 if (-not (Get-Variable apps -Scope Global -ErrorAction SilentlyContinue)) {
     $global:apps = @{
         "chrome"  = "C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -38,9 +38,28 @@ if (-not (Get-Variable apps -Scope Global -ErrorAction SilentlyContinue)) {
     }
 }
 
-# -- Helper: tulis blok $apps ke $PROFILE (idempotent & aman multiline) --
+# ---------------- PATCH: support URI schemes (ms-stickynotes:, ms-settings:, etc.) ----------------
+function Test-UriScheme {
+    param([string]$text)
+    if ([string]::IsNullOrWhiteSpace($text)) { return $false, $null, $false }
+
+    # Detect URI pattern: scheme:...
+    if ($text -match '^[a-z][a-z0-9+\.\-]*:') {
+        $scheme = $text.Split(':')[0]
+        try {
+            $exists = Test-Path -LiteralPath ("HKCR:\{0}" -f $scheme)
+            return $true, $scheme, $exists
+        } catch {
+            return $true, $scheme, $false
+        }
+    }
+    return $false, $null, $false
+}
+# -----------------------------------------------------------------------------------------------
+
+# -- Helper: write the $apps block to $PROFILE (idempotent & multiline-safe) --
 function Save-AppsToProfile {
-    # Susun blok $apps
+    # Build $apps block
     $appsBlock = @()
     $appsBlock += '# ===== Auto-generated apps dictionary ====='
     $appsBlock += '$global:apps = @{'
@@ -48,41 +67,51 @@ function Save-AppsToProfile {
         $appsBlock += "    `"$k`" = `"$($apps[$k])`""
     }
     $appsBlock += '}'
-    $appsBlock += ''  # baris kosong
+    $appsBlock += ''  # empty line
 
-    # Baca profil saat ini (raw agar newline tidak berubah)
+    # Read current profile (raw to preserve newlines)
     $profilePath = $PROFILE
     $content = if (Test-Path $profilePath) { Get-Content $profilePath -Raw } else { "" }
 
-    # Hapus blok lama (jika ada), regex single-line (?s) supaya .* mencakup newline
+    # Remove old block (if present), single-line regex (?s) so .* spans newlines
     $newContent = $content -replace "(?s)# ===== Auto-generated apps dictionary =====.*?}\r?\n", ""
 
-    # Tambahkan blok baru di akhir
+    # Append new block at the end
     $newContent = $newContent.Trim()
     if ($newContent.Length -gt 0) { $newContent += "`r`n" }
     $newContent += ($appsBlock -join "`r`n")
 
-    # Simpan kembali
+    # Save back
     $newContent | Set-Content $profilePath -Encoding UTF8
 }
 
-# ---- Helpers validasi path/command ----
+# ---- Helpers for path/command validation ----
 function Is-LikelyFilePath {
     param([string]$text)
-    # Path jika mengandung drive/sep atau berakhiran .exe/.bat/.cmd
+    # If it's a URI, do not treat as file path
+    $isUri, $scheme, $reg = Test-UriScheme $text
+    if ($isUri) { return $false }
+
+    # Consider it a path if it has a drive/sep or ends with .exe/.bat/.cmd
     return ($text -match '[:\\/]' -or $text -match '\.(exe|bat|cmd)$')
 }
 
 function Resolve-AppPath {
     param([string]$text)
     try {
+        $isUri, $scheme, $reg = Test-UriScheme $text
+        if ($isUri) {
+            # URIs do not require expansion/resolution
+            return $text
+        }
+
         if (Is-LikelyFilePath $text) {
             $expanded = [Environment]::ExpandEnvironmentVariables($text)
             $resolved = Resolve-Path -LiteralPath $expanded -ErrorAction SilentlyContinue
             if ($resolved) { return $resolved.Path }
             return $expanded
         } else {
-            # command seperti 'calc', 'notepad', dll
+            # simple commands like 'calc', 'notepad', etc.
             return $text
         }
     } catch {
@@ -92,6 +121,15 @@ function Resolve-AppPath {
 
 function Test-AppTarget {
     param([string]$target)
+
+    $isUri, $scheme, $reg = Test-UriScheme $target
+    if ($isUri) {
+        if (-not $reg) {
+            Write-Verbose "URI scheme '$scheme' is not present in HKCR. Ensure the supporting app is installed."
+        }
+        return $true
+    }
+
     if (Is-LikelyFilePath $target) {
         $expanded = [Environment]::ExpandEnvironmentVariables($target)
         return (Test-Path -LiteralPath $expanded)
@@ -100,7 +138,7 @@ function Test-AppTarget {
     }
 }
 
-# -- Launcher: open (dengan help terintegrasi) --
+# -- Launcher: open (with integrated help) --
 function open {
     param(
         [Parameter(Mandatory=$true, Position=0)]
@@ -112,23 +150,23 @@ function open {
     # ===== HELP MODE =====
     if ($key -in @('--help','-h','/h','help','/?')) {
         Write-Output ""
-        Write-Output "📘 PowerShell App Launcher – Ringkasan Perintah"
-        Write-Output "----------------------------------------------"
-        Write-Output "open <name>                  → Buka aplikasi"
-        Write-Output "register-app <n> <p>         → Daftar aplikasi baru"
-        Write-Output "   -Force, -DryRun           → Validasi opsional"
-        Write-Output "update-app <n> <p>           → Perbarui path aplikasi"
-        Write-Output "   -Force, -DryRun           → Validasi opsional"
-        Write-Output "remove-app <name>            → Hapus aplikasi dari daftar"
-        Write-Output "list-apps [filter]           → Lihat daftar aplikasi"
+        Write-Output "📘 PowerShell App Launcher – Command Summary"
+        Write-Output "-------------------------------------------"
+        Write-Output "open <name>                  → Launch an app"
+        Write-Output "register-app <n> <p>         → Register a new app"
+        Write-Output "   -Force, -DryRun           → Optional validation flags"
+        Write-Output "update-app <n> <p>           → Update an app path/command"
+        Write-Output "   -Force, -DryRun           → Optional validation flags"
+        Write-Output "remove-app <name>            → Remove app from registry"
+        Write-Output "list-apps [filter]           → Show registered apps"
         Write-Output ""
-        Write-Output "Alias cepat:"
+        Write-Output "Quick aliases:"
         Write-Output "  o, regapp, updapp, rmapp, apps / la"
         Write-Output ""
-        Write-Output "Contoh:"
+        Write-Output "Examples:"
         Write-Output "  open vscode"
         Write-Output "  regapp store ms-windows-store:"
-        Write-Output "  updapp vscode 'C:\Path\baru\Code.exe'"
+        Write-Output "  updapp vscode 'C:\New\Path\Code.exe'"
         Write-Output "  rmapp store"
         Write-Output "  apps ms"
         Write-Output ""
@@ -138,20 +176,20 @@ function open {
     if ($apps.ContainsKey($key)) {
         $target = Resolve-AppPath $apps[$key]
         if (-not (Test-AppTarget $target)) {
-            Write-Warning "Target untuk '$key' tidak ditemukan/command tidak tersedia: $target"
-            Write-Output  "ℹ️  Perbarui dengan: update-app `"$key`" `"<path/command-baru>`""
+            Write-Warning "Target for '$key' not found/command unavailable: $target"
+            Write-Output  "ℹ️  Update with: update-app `"$key`" `"<new-path-or-command>`""
             return
         }
-        Write-Output "🚀 Membuka $key ..."
-        try { Start-Process $target } catch { Write-Error "Gagal menjalankan: $target" }
+        Write-Output "🚀 Launching $key ..."
+        try { Start-Process $target } catch { Write-Error "Failed to start: $target" }
     } else {
-        Write-Output "❌ Aplikasi '$app' belum diregister di command 'open'."
-        Write-Output "ℹ️  Cek daftar: list-apps   |   daftar cepat: register-app <name> <path>"
-        Write-Output "ℹ️  Bantuan: open --help"
+        Write-Output "❌ App '$app' is not registered with 'open'."
+        Write-Output "ℹ️  See: list-apps   |   quick add: register-app <name> <path>"
+        Write-Output "ℹ️  Help: open --help"
     }
 }
 
-# -- Register aplikasi baru (validasi + -Force + -DryRun) --
+# -- Register a new app (validation + -Force + -DryRun) --
 function register-app {
     [CmdletBinding()]
     param(
@@ -169,8 +207,8 @@ function register-app {
     $already   = $apps.ContainsKey($lowerName)
 
     if (-not $exists -and -not $Force) {
-        Write-Warning "Target tidak ditemukan/command tidak tersedia: $path"
-        Write-Output  "ℹ️  Jika yakin benar, jalankan lagi dengan -Force:"
+        Write-Warning "Target not found/command unavailable: $path"
+        Write-Output  "ℹ️  If you are sure, run again with -Force:"
         Write-Output  "    register-app `"$name`" `"$path`" -Force"
         return
     }
@@ -181,33 +219,33 @@ function register-app {
             Write-Output "    Name  : $lowerName"
             Write-Output "    Old   : $($apps[$lowerName])"
             Write-Output "    New   : $path"
-            Write-Output "    File  : $PROFILE (tidak diubah)"
+            Write-Output "    File  : $PROFILE (unchanged)"
         } else {
             Write-Output "🔎 DRY-RUN: register-app"
             Write-Output "    Name  : $lowerName"
             Write-Output "    New   : $path"
-            Write-Output "    File  : $PROFILE (tidak diubah)"
+            Write-Output "    File  : $PROFILE (unchanged)"
         }
         if (-not $exists) {
-            Write-Output "⚠️  Catatan: target belum terverifikasi ada (gunakan -Force untuk melewati validasi saat bukan dry-run)."
+            Write-Output "⚠️  Note: target not verified to exist (use -Force to bypass validation when not dry-run)."
         }
         return
     }
 
-    # Tulis perubahan (bukan dry-run)
-    $apps[$lowerName] = $path  # simpan sesuai input user
+    # Persist change (not dry-run)
+    $apps[$lowerName] = $path  # keep the user's input as-is
     Save-AppsToProfile
 
     if ($exists) {
         Write-Output "✅ Registered '$lowerName' → $path"
     } else {
         Write-Output "✅ Registered (forced) '$lowerName' → $path"
-        Write-Output "⚠️  Catatan: target belum terverifikasi ada. Pastikan path/command benar."
+        Write-Output "⚠️  Note: target not verified to exist. Ensure the path/command is correct."
     }
-    Write-Output "ℹ️  Gunakan 'list-apps' untuk verifikasi."
+    Write-Output "ℹ️  Use 'list-apps' to verify."
 }
 
-# -- Hapus aplikasi --
+# -- Remove an app --
 function remove-app {
     param(
         [Parameter(Mandatory=$true, Position=0)]
@@ -217,14 +255,14 @@ function remove-app {
     if ($apps.ContainsKey($lowerName)) {
         $apps.Remove($lowerName)
         Save-AppsToProfile
-        Write-Output "🗑️  Aplikasi '$lowerName' berhasil dihapus."
-        Write-Output "ℹ️  Gunakan 'list-apps' untuk verifikasi."
+        Write-Output "🗑️  App '$lowerName' removed."
+        Write-Output "ℹ️  Use 'list-apps' to verify."
     } else {
-        Write-Output "⚠️  Aplikasi '$name' tidak ditemukan di daftar."
+        Write-Output "⚠️  App '$name' is not in the registry."
     }
 }
 
-# -- Update path aplikasi (validasi + -Force + -DryRun) --
+# -- Update app path/command (validation + -Force + -DryRun) --
 function update-app {
     [CmdletBinding()]
     param(
@@ -238,7 +276,7 @@ function update-app {
 
     $lowerName = $name.ToLower()
     if (-not $apps.ContainsKey($lowerName)) {
-        Write-Output "⚠️  Aplikasi '$name' belum terdaftar. Gunakan:"
+        Write-Output "⚠️  App '$name' is not registered. Use:"
         Write-Output "    register-app `"$name`" `"$newPath`""
         return
     }
@@ -248,8 +286,8 @@ function update-app {
     $oldPath  = $apps[$lowerName]
 
     if (-not $exists -and -not $Force) {
-        Write-Warning "Target baru tidak ditemukan/command tidak tersedia: $newPath"
-        Write-Output  "ℹ️  Jika yakin benar, jalankan lagi dengan -Force:"
+        Write-Warning "New target not found/command unavailable: $newPath"
+        Write-Output  "ℹ️  If you are sure, run again with -Force:"
         Write-Output  "    update-app `"$name`" `"$newPath`" -Force"
         return
     }
@@ -259,14 +297,14 @@ function update-app {
         Write-Output "    Name  : $lowerName"
         Write-Output "    Old   : $oldPath"
         Write-Output "    New   : $newPath"
-        Write-Output "    File  : $PROFILE (tidak diubah)"
+        Write-Output "    File  : $PROFILE (unchanged)"
         if (-not $exists) {
-            Write-Output "⚠️  Catatan: target baru belum terverifikasi ada (gunakan -Force untuk melewati validasi saat bukan dry-run)."
+            Write-Output "⚠️  Note: new target not verified to exist (use -Force to bypass validation when not dry-run)."
         }
         return
     }
 
-    # Tulis perubahan (bukan dry-run)
+    # Persist change (not dry-run)
     $apps[$lowerName] = $newPath
     Save-AppsToProfile
 
@@ -274,11 +312,11 @@ function update-app {
     Write-Output "    Old → $oldPath"
     Write-Output "    New → $newPath"
     if (-not $exists) {
-        Write-Output "⚠️  Catatan: target baru belum terverifikasi ada (forced)."
+        Write-Output "⚠️  Note: new target not verified to exist (forced)."
     }
 }
 
-# -- List aplikasi --
+# -- List apps --
 function list-apps {
     param([string]$filter)
 
@@ -290,9 +328,9 @@ function list-apps {
 
     if (-not $pairs) {
         if ($filter) {
-            Write-Output "⚠️  Tidak ada aplikasi yang cocok filter: '$filter'."
+            Write-Output "⚠️  No apps match the filter: '$filter'."
         } else {
-            Write-Output "⚠️  Belum ada aplikasi yang terdaftar."
+            Write-Output "⚠️  No apps registered yet."
         }
         return
     }
@@ -309,22 +347,22 @@ function list-apps {
 }
 
 # -- Startup Message --
-# Write-Output "✅ Please registered this application on PowerShell command profile:"
+# Write-Output "✅ Please register these applications in your PowerShell profile:"
 # $apps.Keys | Sort-Object | ForEach-Object { Write-Output "   - $_" }
 Write-Output "ℹ️  Main Command: open <name>, register-app, update-app, remove-app, list-apps"
 Write-Output "ℹ️  Complete Help: open --help"
 
 # ================= Aliases & Autocomplete =================
 
-# Aliases pendek
+# Short aliases
 Set-Alias o        open
 Set-Alias regapp   register-app
 Set-Alias updapp   update-app
 Set-Alias rmapp    remove-app
-# 'apps' kita override biar bisa forward filter otomatis
+# keep 'la' for list-apps
 Set-Alias la       list-apps
 
-# Alias fungsi 'apps' yang auto-forward filter
+# 'apps' wrapper that forwards filter automatically
 function apps {
     param([string]$filter)
     if ($PSBoundParameters.ContainsKey('filter') -and $null -ne $filter -and $filter.Trim().Length -gt 0) {
@@ -338,7 +376,7 @@ function apps {
 Set-Alias la apps
 
 # ---------- Fuzzy Autocomplete Helpers ----------
-# Subsequence tester (untuk fuzzy)
+# Subsequence tester (for fuzzy)
 if (-not (Get-Command Test-Subsequence -ErrorAction SilentlyContinue)) {
     function Test-Subsequence {
         param([string]$Text, [string]$Pattern)
@@ -366,11 +404,11 @@ function Complete-AppNameFuzzy {
             $score = 0
         }
         elseif ($kl.StartsWith($term.ToLower())) {
-            $score = 0 + ($kl.Length - $term.Length)         # terbaik: prefix
+            $score = 0 + ($kl.Length - $term.Length)         # best: prefix
         }
         elseif ($kl -like "*$term*") {
             $idx = $kl.IndexOf($term.ToLower())
-            $score = 100 + $idx + ($kl.Length - $term.Length) # tengah: contains
+            $score = 100 + $idx + ($kl.Length - $term.Length) # middle: contains
         }
         else {
             $ok,$gaps = Test-Subsequence -Text $kl -Pattern $term.ToLower()
@@ -384,19 +422,19 @@ function Complete-AppNameFuzzy {
     }
 }
 
-# ---- Autocomplete untuk 'apps' (parameter filter) - fuzzy ----
+# ---- Autocomplete for 'apps' (filter parameter) - fuzzy ----
 Register-ArgumentCompleter -CommandName apps -ParameterName filter -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete)
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
 }
 
-# ---- Autocomplete nama aplikasi untuk 'open' (fuzzy) ----
+# ---- Autocomplete app names for 'open' (fuzzy) ----
 Register-ArgumentCompleter -CommandName open -ParameterName app -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete)
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
 }
 
-# ---- Autocomplete nama aplikasi untuk 'update-app' & 'remove-app' (fuzzy) ----
+# ---- Autocomplete for 'update-app' & 'remove-app' (fuzzy) ----
 Register-ArgumentCompleter -CommandName update-app -ParameterName name -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete)
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
@@ -405,7 +443,7 @@ Register-ArgumentCompleter -CommandName remove-app -ParameterName name -ScriptBl
     param($commandName, $parameterName, $wordToComplete)
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
 }
-# dukung alias
+# support aliases
 Register-ArgumentCompleter -CommandName updapp -ParameterName name -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete)
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
@@ -415,7 +453,7 @@ Register-ArgumentCompleter -CommandName rmapp -ParameterName name -ScriptBlock {
     Complete-AppNameFuzzy -wordToComplete $wordToComplete
 }
 
-# ---- Autocomplete untuk flags Force/DryRun ----
+# ---- Autocomplete for Force/DryRun flags ----
 Register-ArgumentCompleter -CommandName register-app -ParameterName Force -ScriptBlock {
     [System.Management.Automation.CompletionResult]::new('-Force','-Force','ParameterName','Force register even if path not found')
 }
@@ -431,7 +469,7 @@ Register-ArgumentCompleter -CommandName update-app -ParameterName DryRun -Script
 
 # =====================================================================
 # ===== Auto-generated apps dictionary =====
-# (Bagian ini di-maintain otomatis oleh Save-AppsToProfile)
+# (This section is maintained automatically by Save-AppsToProfile)
 $global:apps = @{
     "arduino"   = "C:\Program Files\Arduino IDE\Arduino IDE.exe"
     "calc"      = "calc"
