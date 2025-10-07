@@ -46,13 +46,13 @@ function Test-UriScheme {
     $t = $text.Trim()
 
     # EXCLUDE Windows drive path: C:\..., D:\..., termasuk "C:folder\file"
-    if ($t -match '^[A-Za-z]:') { return $false, $null, $false }
+    if ($t -match "^[A-Za-z]:") { return $false, $null, $false }
     # EXCLUDE UNC path: \\server\share atau //server/share
-    if ($t -match '^(\\\\|//)') { return $false, $null, $false }
+    if ($t -match "^(\\\\|//)") { return $false, $null, $false }
 
     # Detect URI scheme (ms-settings:, https:, mailto:, dll)
     # Negative lookahead cegah pola "scheme:\" atau "scheme:/"
-    if ($t -match '^[a-z][a-z0-9+\.\-]*:(?![\\/])') {
+    if ($t -match "^[a-z][a-z0-9+\.\-]*:(?![\\/])") {
         $scheme = ($t -split ':',2)[0]
         try {
             $exists = Test-Path -LiteralPath ("HKCR:\{0}" -f $scheme)
@@ -66,6 +66,7 @@ function Test-UriScheme {
 
 # -- Tulis ulang $apps ke $PROFILE (idempotent & multiline-safe) --
 function Save-AppsToProfile {
+    # Susun blok auto-generated
     $appsBlock = @()
     $appsBlock += '# ===== Auto-generated apps dictionary ====='
     $appsBlock += '$global:apps = @{'
@@ -73,14 +74,20 @@ function Save-AppsToProfile {
         $appsBlock += "    `"$k`" = `"$($apps[$k])`""
     }
     $appsBlock += '}'
-    $appsBlock += ''  # empty line
 
     $profilePath = $PROFILE
     $content = if (Test-Path $profilePath) { Get-Content $profilePath -Raw } else { "" }
-    $newContent = $content -replace "(?s)# ===== Auto-generated apps dictionary =====.*?}\r?\n", ""
-    $newContent = $newContent.Trim()
-    if ($newContent.Length -gt 0) { $newContent += "`r`n" }
-    $newContent += ($appsBlock -join "`r`n")
+
+    # Cari blok lama & replace (atau append kalau belum ada)
+    $pattern = "(?s)# ===== Auto-generated apps dictionary =====.*?\}"
+    if ($content -match $pattern) {
+        $newContent = [regex]::Replace($content, $pattern, ($appsBlock -join "`r`n"))
+    } else {
+        $trimmed = $content.TrimEnd()
+        if ($trimmed.Length -gt 0) { $trimmed += "`r`n`r`n" }
+        $newContent = $trimmed + ($appsBlock -join "`r`n")
+    }
+
     $newContent | Set-Content $profilePath -Encoding UTF8
 }
 
@@ -96,8 +103,10 @@ function Is-LikelyFilePath {
     # - ada drive/UNC/dir separator, atau
     # - berakhiran exe/bat/cmd/lnk
     return (
-        $text -match '^[A-Za-z]:|^(\\\\|//)|[\\/]' -or
-        $text -match '\.(exe|bat|cmd|lnk)$'
+        ($text -match "^[A-Za-z]:") -or
+        ($text -match "^(\\\\|//)") -or
+        ($text -match "[\\/]") -or
+        ($text -match "\.(exe|bat|cmd|lnk)$")
     )
 }
 
@@ -165,23 +174,32 @@ function Show-LauncherHelp {
     $lines = @(
         @{ text = "PowerShell App Launcher – Command Summary"; style = "title" }
         @{ text = "-------------------------------------------"; style = "dim"   }
-        @{ text = "open <name>                  → Launch an app"; style = "cmd"   }
-        @{ text = "register-app <n> <p>         → Register a new app"; style = "cmd" }
-        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
+        @{ text = "open <name>                  → Launch a registered app"; style = "cmd"   }
+        @{ text = "register-app <n> <p>         → Register a new app path/command"; style = "cmd" }
         @{ text = "update-app <n> <p>           → Update an app path/command"; style = "cmd" }
-        @{ text = "  -Force, -DryRun            → Optional validation flags"; style = "dim" }
-        @{ text = "remove-app <name>            → Remove app from registry"; style = "cmd" }
-        @{ text = "list-apps [filter]           → Show registered apps"; style = "cmd" }
-        @{ text = "";                              style = "" }
-        @{ text = "Quick aliases:";                style = "title2" }
-        @{ text = "  o, regapp, updapp, rmapp, apps / la"; style = "cmd" }
-        @{ text = "";                              style = "" }
-        @{ text = "Examples:";                     style = "title2" }
-        @{ text = "  open vscode";                 style = "ex" }
+        @{ text = "remove-app <name>            → Remove an app from registry"; style = "cmd" }
+        @{ text = "list-apps [filter]           → Show all registered apps"; style = "cmd" }
+        @{ text = ""; style = "" }
+        @{ text = "Media Commands:"; style = "title2" }
+        @{ text = "  play-video <path> [options]  → Open video file(s) or URL"; style = "cmd" }
+        @{ text = "    -With <app>               → Use a specific player (e.g. vlc)"; style = "dim" }
+        @{ text = "    -Recurse                  → Include subfolders when using patterns"; style = "dim" }
+        @{ text = ""; style = "" }
+        @{ text = "Quick aliases:"; style = "title2" }
+        @{ text = "  o, regapp, updapp, rmapp, apps / la, play"; style = "cmd" }
+        @{ text = ""; style = "" }
+        @{ text = "Examples:"; style = "title2" }
+        @{ text = "  open vscode"; style = "ex" }
         @{ text = "  regapp store ms-windows-store:"; style = "ex" }
-        @{ text = "  updapp vscode 'C:\New\Path\Code.exe'"; style = "ex" }
-        @{ text = "  rmapp store";                 style = "ex" }
-        @{ text = "  apps ms";                     style = "ex" }
+        @{ text = "  updapp vscode 'C:\\New\\Path\\Code.exe'"; style = "ex" }
+        @{ text = "  rmapp store"; style = "ex" }
+        @{ text = "  apps ms"; style = "ex" }
+        @{ text = ""; style = "" }
+        @{ text = "Multimedia Examples:"; style = "title2" }
+        @{ text = "  play 'D:\\Videos\\demo.mp4'"; style = "ex" }
+        @{ text = "  play *.mp4 -Recurse"; style = "ex" }
+        @{ text = "  play https://youtu.be/dQw4w9WgXcQ"; style = "ex" }
+        @{ text = "  play trailer.mkv -With vlc"; style = "ex" }
     )
 
     if ($hasAnsi) {
@@ -209,23 +227,32 @@ function Show-LauncherHelp {
         Write-Host $banner -ForegroundColor Cyan
         Write-Host "PowerShell App Launcher – Command Summary" -ForegroundColor Yellow
         Write-Host "-------------------------------------------" -ForegroundColor DarkGray
-        Write-Host "open <name>                  → Launch an app" -ForegroundColor Green
-        Write-Host "register-app <n> <p>         → Register a new app" -ForegroundColor Green
-        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
+        Write-Host "open <name>                  → Launch a registered app" -ForegroundColor Green
+        Write-Host "register-app <n> <p>         → Register a new app path/command" -ForegroundColor Green
         Write-Host "update-app <n> <p>           → Update an app path/command" -ForegroundColor Green
-        Write-Host "  -Force, -DryRun            → Optional validation flags" -ForegroundColor DarkGray
-        Write-Host "remove-app <name>            → Remove app from registry" -ForegroundColor Green
-        Write-Host "list-apps [filter]           → Show registered apps" -ForegroundColor Green
+        Write-Host "remove-app <name>            → Remove an app from registry" -ForegroundColor Green
+        Write-Host "list-apps [filter]           → Show all registered apps" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Media Commands:" -ForegroundColor Yellow
+        Write-Host "  play-video <path> [options]  → Open video file(s) or URL" -ForegroundColor Green
+        Write-Host "    -With <app>               → Use a specific player (e.g. vlc)" -ForegroundColor DarkGray
+        Write-Host "    -Recurse                  → Include subfolders when using patterns" -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "Quick aliases:" -ForegroundColor Yellow
-        Write-Host "  o, regapp, updapp, rmapp, apps / la" -ForegroundColor Green
+        Write-Host "  o, regapp, updapp, rmapp, apps / la, play" -ForegroundColor Green
         Write-Host ""
         Write-Host "Examples:" -ForegroundColor Yellow
         Write-Host "  open vscode" -ForegroundColor Blue
         Write-Host "  regapp store ms-windows-store:" -ForegroundColor Blue
-        Write-Host "  updapp vscode 'C:\New\Path\Code.exe'" -ForegroundColor Blue
+        Write-Host "  updapp vscode 'C:\\New\\Path\\Code.exe'" -ForegroundColor Blue
         Write-Host "  rmapp store" -ForegroundColor Blue
         Write-Host "  apps ms" -ForegroundColor Blue
+        Write-Host ""
+        Write-Host "Multimedia Examples:" -ForegroundColor Yellow
+        Write-Host "  play 'D:\\Videos\\demo.mp4'" -ForegroundColor Blue
+        Write-Host "  play *.mp4 -Recurse" -ForegroundColor Blue
+        Write-Host "  play https://youtu.be/dQw4w9WgXcQ" -ForegroundColor Blue
+        Write-Host "  play trailer.mkv -With vlc" -ForegroundColor Blue
     }
 }
 
@@ -362,13 +389,6 @@ function update-app {
 # ------------- Banner untuk list-apps -------------
 function Show-AppsBanner {
     $hasAnsi = $PSStyle -ne $null
-    $banner = @'
-    _    ____  ____  _____ 
-   / \  |  _ \|  _ \| ____|
-  / _ \ | |_) | |_) |  _|  
- / ___ \|  __/|  __/| |___ 
-/_/   \_\_|   |_|   |_____|
-'@
     if ($hasAnsi) {
         $c = [pscustomobject]@{
             accent = $PSStyle.Foreground.Cyan + $PSStyle.Bold
@@ -531,7 +551,7 @@ function play-video {
 
         # URL? (http/https atau custom scheme)
         $isUri, $scheme, $reg = Test-UriScheme $p
-        if ($isUri -or $p -match '^(http|https)://') {
+        if ($isUri -or $p -match "^(http|https)://") {
             if ($player) {
                 try { Start-Process -FilePath $player -ArgumentList @($p) ; $opened++ }
                 catch { Write-Error "Gagal membuka URL dengan player: $p" }
@@ -605,30 +625,28 @@ function apps { param([string]$filter) if ($PSBoundParameters.ContainsKey('filte
 Set-Alias la apps
 Set-Alias play play-video
 
-
+# =====================================================================
 # =====================================================================
 # ===== Auto-generated apps dictionary =====
-# (Bagian ini otomatis di-maintain oleh Save-AppsToProfile)
 $global:apps = @{
-    "arduino"   = "C:\Program Files\Arduino IDE\Arduino IDE.exe"
-    "calc"      = "calc"
-    "chrome"    = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-    "discord"   = "C:\Users\azril\AppData\Local\Discord\app-1.0.9209\Discord.exe"
-    "explorer"  = "C:\Windows\explorer.exe"
-    "godot"     = "C:\Program Files\Godot_v4.4.1\Godot_v4.4.1-stable_mono_win64.exe"
-    "msedge"    = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-    "msexcel"   = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.exe"
-    "mspoint"   = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.exe"
-    "msword"    = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.exe"
-    "notepad"   = "notepad"
+    "arduino" = "C:\Program Files\Arduino IDE\Arduino IDE.exe"
+    "calc" = "calc"
+    "chrome" = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+    "discord" = "C:\Users\azril\AppData\Local\Discord\app-1.0.9210\Discord.exe"
+    "explorer" = "C:\Windows\explorer.exe"
+    "godot" = "C:\Program Files\Godot_v4.4.1\Godot_v4.4.1-stable_mono_win64.exe"
+    "msedge" = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+    "msexcel" = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.exe"
+    "mspoint" = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.exe"
+    "msword" = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.exe"
+    "notepad" = "notepad"
     "notepad++" = "C:\Program Files\Notepad++\notepad++.exe"
-    "paint"     = "mspaint"
-    "pcsx2"     = "C:\Users\azril\Documents\pcsx2-v2.3.88-windows-x64-Qt\pcsx2-qt.exe"
-    "postman"   = "C:\Users\azril\AppData\Local\Postman\Postman.exe"
-    "spotify"   = "C:\Users\Azril\AppData\Roaming\Spotify\Spotify.exe"
-    "steam"     = "C:\Program Files (x86)\Steam\steam.exe"
-    "vbox"      = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
-    "vlc"       = "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
-    "vscode"    = "C:\Users\Azril\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+    "paint" = "mspaint"
+    "pcsx2" = "C:\Users\azril\Documents\pcsx2-v2.3.88-windows-x64-Qt\pcsx2-qt.exe"
+    "postman" = "C:\Users\azril\AppData\Local\Postman\Postman.exe"
+    "spotify" = "C:\Users\Azril\AppData\Roaming\Spotify\Spotify.exe"
+    "steam" = "C:\Program Files (x86)\Steam\steam.exe"
+    "vbox" = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
+    "vlc" = "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
+    "vscode" = "C:\Users\Azril\AppData\Local\Programs\Microsoft VS Code\Code.exe"
 }
-# =====================================================================
