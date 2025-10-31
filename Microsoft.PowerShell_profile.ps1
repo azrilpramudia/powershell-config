@@ -22,6 +22,11 @@ if (Test-Path($ChocolateyProfile)) {
   Import-Module "$ChocolateyProfile"
 }
 
+# Force Fastfetch to use YOUR config every time (bypass path confusion)
+if (Get-Command fastfetch -ErrorAction SilentlyContinue) {
+    fastfetch -c "C:/Users/azril/.config/fastfetch/config.jsonc"
+}
+
 # =====================================================================
 # =================== PowerShell App Launcher ==========================
 # Features: open, register-app, remove-app, update-app, list-apps
@@ -650,3 +655,4 @@ $global:apps = @{
     "vlc" = "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
     "vscode" = "C:\Users\Azril\AppData\Local\Programs\Microsoft VS Code\Code.exe"
 }
+
